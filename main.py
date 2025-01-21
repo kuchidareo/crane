@@ -24,26 +24,57 @@ def create_dataloader(X, y, batch_size=32, shuffle=True):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
     return dataloader
 
-def test(model, dataloader):
-    model.eval()
-    correct = 0
-    total = 0
-    for X_batch, y_batch in tqdm(dataloader, desc='Validation'):
-        outputs = model(X_batch)
-        _, predicted = torch.max(outputs, 1)
-        total += y_batch.size(0)
-        correct += (predicted == y_batch).sum().item()
 
+
+def test(model, dataloader):
+    non_zero_val_loss, non_zero_val_accuracy, overall_loss, overall_val_acccuracy = evaluate_accuracy(model, dataloader)
     
     mlflow.log_metrics(
         {
-            "test_accuracy": correct / total
+            "non_zero_test_accuracy": non_zero_val_accuracy,
+            "overall_test_accuracy": overall_val_acccuracy
         }
     )
 
-    print(f'Validation Accuracy: {correct / total:.4f}')
+    print(f'Non-Zero Test Acc. {non_zero_val_accuracy:.4f}, Overall Test Acc.: {overall_val_acccuracy:.4f}')
 
-def train(model, dataloader, val_dataloder, epochs=10, patience=5):
+def evaluate_accuracy(model, dataloader):
+    non_zero_loss = 0
+    non_zero_correct = 0
+    non_zero_total = 0
+    overall_loss = 0
+    overall_correct = 0
+    overall_total = 0
+
+    for X_batch, y_batch in tqdm(dataloader, desc='Validation'):
+        with torch.no_grad():
+            outputs = model(X_batch)
+            _, predicted = torch.max(outputs, 1)
+
+            # Calculate overall accuracy and loss
+            overall_total += y_batch.size(0)
+            overall_correct += (predicted == y_batch).sum().item()
+            overall_loss += torch.nn.functional.cross_entropy(outputs, y_batch).item()
+
+            # Filter out samples where the label is 0
+            mask = (y_batch != 0)
+            filtered_y_batch = y_batch[mask]
+            filtered_predicted = predicted[mask]
+
+            # Calculate loss and accuracy only for non-zero labels
+            if len(filtered_y_batch) > 0:
+                loss = torch.nn.functional.cross_entropy(outputs[mask], filtered_y_batch)
+                non_zero_loss += loss.item()
+                non_zero_total += filtered_y_batch.size(0)
+                non_zero_correct += (filtered_predicted == filtered_y_batch).sum().item()
+
+    non_zero_val_loss = non_zero_loss / non_zero_total if non_zero_total > 0 else float('inf')
+    non_zero_val_accuracy = non_zero_correct / non_zero_total if non_zero_total > 0 else 0.0
+    overall_loss = overall_loss / overall_total if overall_total > 0 else float('inf')
+    overall_accuracy = overall_correct / overall_total if overall_total > 0 else 0.0
+    return non_zero_val_loss, non_zero_val_accuracy, overall_loss, overall_accuracy
+
+def train(model, dataloader, val_dataloader, epochs=10, patience=5):
     model.train()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
     
@@ -58,30 +89,20 @@ def train(model, dataloader, val_dataloder, epochs=10, patience=5):
             loss.backward()
             optimizer.step()
 
-        epoch_loss = 0
-        correct = 0
-        total = 0
-        for X_batch, y_batch in tqdm(val_dataloder, desc=f'Epoch {epoch + 1}/{epochs}'):
-            with torch.no_grad():
-                outputs = model(X_batch)
-                _, predicted = torch.max(outputs, 1)
-                loss = torch.nn.functional.cross_entropy(outputs, y_batch)
-                epoch_loss += loss.item()
-                total += y_batch.size(0)
-                correct += (predicted == y_batch).sum().item()
-        
-        val_loss = epoch_loss / len(val_dataloder)
+        non_zero_val_loss, non_zero_val_accuracy, overall_val_loss, overall_val_accuracy = evaluate_accuracy(model, val_dataloader)
         mlflow.log_metrics(
             {
-                "val_loss": val_loss,
-                "val_accuracy": correct / total
+                "non_zero_val_loss": non_zero_val_loss,
+                "non_zero_val_accuracy": non_zero_val_accuracy,
+                "overall_accuracy": overall_val_accuracy,
+                "overall_loss": overall_val_loss
             }, step=epoch
         )
-        print(f'Epoch {epoch + 1}/{epochs}, Val Loss: {val_loss:.4f}, Val Acc.: {correct / total:.4f}')
+        print(f'Epoch {epoch + 1}/{epochs}, Non-Zero Val Loss: {non_zero_val_loss:.4f}, Non-Zero Val Acc.: {non_zero_val_accuracy:.4f}, Overall Loss: {overall_val_loss:.4f}, Overall Acc.: {overall_val_accuracy:.4f}, ')
 
         # Early stopping logic
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        if overall_val_loss < best_val_loss:
+            best_val_loss = overall_val_loss
             epochs_without_improvement = 0
         else:
             epochs_without_improvement += 1
