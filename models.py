@@ -78,11 +78,11 @@ class Locomotion_CNN(nn.Module):
         return x
     
 class LL_Arm_LSTM(nn.Module):
-    def __init__(self, input_size=38):
+    def __init__(self):
         super(LL_Arm_LSTM, self).__init__()
-        self.lstm1 = nn.LSTM(input_size=input_size, hidden_size=5, batch_first=True)
+        self.lstm1 = nn.LSTM(input_size=38, hidden_size=50, batch_first=True)
         self.dropout = nn.Dropout(0.2)
-        self.lstm2 = nn.LSTM(input_size=5, hidden_size=15, batch_first=True)
+        self.lstm2 = nn.LSTM(input_size=50, hidden_size=15, batch_first=True)
         self.fc = nn.Linear(15, 14)  # Output layer
 
     def forward(self, x):
@@ -95,7 +95,7 @@ class LL_Arm_LSTM(nn.Module):
         return out
         
 class Locomotion_LSTM(nn.Module):
-    def __init__(self, input_size=38):
+    def __init__(self):
         super(Locomotion_LSTM, self).__init__()
         self.lstm1 = nn.LSTM(input_size=38, hidden_size=50, batch_first=True)
         self.dropout = nn.Dropout(0.2)

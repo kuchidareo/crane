@@ -117,7 +117,7 @@ def main(config):
     X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False, test_size=0.20)
     X_test, X_val, y_test, y_val = train_test_split(X_test, y_test, shuffle=False, test_size=0.5)
     train_dataloader = create_dataloader(X_train, y_train, batch_size=32, shuffle=True)
-    val_dataloder = create_dataloader(X_val, y_val, batch_size=32, shuffle=False)
+    val_dataloader = create_dataloader(X_val, y_val, batch_size=32, shuffle=False)
     test_dataloader = create_dataloader(X_test, y_test, batch_size=32, shuffle=False)
 
     if position in [value.RIGHT_ARM, value.LEFT_ARM]:
@@ -133,7 +133,7 @@ def main(config):
     
     with mlflow.start_run():
         log_params_from_omegaconf_dict(config)
-        train(model, train_dataloader, val_dataloder, epochs=20)
+        train(model, train_dataloader, val_dataloader, epochs=20)
         test(model, test_dataloader)
     # save_model(model, position)
 
