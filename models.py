@@ -5,6 +5,8 @@ import torch.nn.functional as F
 class LL_Arm_CNN(nn.Module):
     def __init__(self, window_size=1):
         super(LL_Arm_CNN, self).__init__()
+
+        self.num_classes = 14 # LL_ARM has 13 classes
         
         self.conv1 = nn.Conv1d(in_channels=1, out_channels=16, kernel_size=3, stride=1, padding=1)
         self.pool = nn.MaxPool1d(kernel_size=2, stride=2)  # Max pooling
@@ -15,7 +17,7 @@ class LL_Arm_CNN(nn.Module):
 
         self.fc1 = nn.Linear(self.output_size, 128)
         self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, 14) # LL_ARM has 13 classes
+        self.fc3 = nn.Linear(64, self.num_classes) 
 
     def _get_conv_output_size(self, window_size):
         # Create a dummy input tensor with the given window size
@@ -43,6 +45,8 @@ class LL_Arm_CNN(nn.Module):
 class Locomotion_CNN(nn.Module):
     def __init__(self, window_size=1):
         super(Locomotion_CNN, self).__init__()
+
+        self.num_classes = 5 # Locomotion has 5 classes
         
         self.conv1 = nn.Conv1d(in_channels=1, out_channels=16, kernel_size=3, stride=1, padding=1)
         self.pool = nn.MaxPool1d(kernel_size=2, stride=2)  # Max pooling
@@ -53,7 +57,7 @@ class Locomotion_CNN(nn.Module):
         
         self.fc1 = nn.Linear(self.output_size, 128)
         self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, 5)  # Locomotion has 5 classes
+        self.fc3 = nn.Linear(64, self.num_classes)
 
     def _get_conv_output_size(self, window_size):
         # Create a dummy input tensor with the given window size
@@ -80,10 +84,13 @@ class Locomotion_CNN(nn.Module):
 class LL_Arm_LSTM(nn.Module):
     def __init__(self):
         super(LL_Arm_LSTM, self).__init__()
+
+        self.num_classes = 14 
+
         self.lstm1 = nn.LSTM(input_size=38, hidden_size=50, batch_first=True)
         self.dropout = nn.Dropout(0.2)
         self.lstm2 = nn.LSTM(input_size=50, hidden_size=15, batch_first=True)
-        self.fc = nn.Linear(15, 14)  # Output layer
+        self.fc = nn.Linear(15, self.num_classes)  # Output layer
 
     def forward(self, x):
         # x.size(): (batch, window, columns) [32, 32, 38]
@@ -97,10 +104,13 @@ class LL_Arm_LSTM(nn.Module):
 class Locomotion_LSTM(nn.Module):
     def __init__(self):
         super(Locomotion_LSTM, self).__init__()
+
+        self.num_classes = 5
+        
         self.lstm1 = nn.LSTM(input_size=38, hidden_size=50, batch_first=True)
         self.dropout = nn.Dropout(0.2)
         self.lstm2 = nn.LSTM(input_size=50, hidden_size=50, batch_first=True)
-        self.fc = nn.Linear(50, 5)  # Output layer
+        self.fc = nn.Linear(50, self.num_classes)  # Output layer
 
     def forward(self, x):
         out, _ = self.lstm1(x)

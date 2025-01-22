@@ -1,0 +1,4 @@
+experiment_name: "crane_performance_comparison"
+window_size: 32
+model_type: "CNN"
+position: "right_arm"

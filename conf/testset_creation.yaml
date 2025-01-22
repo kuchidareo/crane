@@ -1,0 +1,4 @@
+experiment_name: "testset_creation"
+window_size: 32
+model_type: "CNN"
+position: "right_arm"

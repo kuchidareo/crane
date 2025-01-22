@@ -17,10 +17,13 @@ class DataProcessor:
         self.data_collection = pd.DataFrame()
         self.column_to_sensor = {}
         self.sensor_to_column = {}
+        self.track_dict = {}
+        self.reset_label_to_original_label = {}
         self.read_colum_names()
+        self.init_label_legend()
         self.sensor_to_position = config.sensor_to_position
         self.position_to_sensor = config.position_to_sensor
-        self.position_to_label = config.position_to_label
+        self.position_to_original_position_label = config.position_to_original_position_label
 
     def get_index(self, string):
         """
@@ -57,9 +60,9 @@ class DataProcessor:
                             self.sensor_to_column[sensor_name] = [column_name]
                     self.columns.append(column_name)
 
-    def extract_data(self):
+    def extract_train_data(self, test_file="S4-ADL5.dat"):
         """
-        Extracts data from .dat files in the OpportunityUCIDataset/dataset folder.
+        Extracts traindata from .dat files in the OpportunityUCIDataset/dataset folder.
 
         Returns:
         pandas.DataFrame: Dataframe containing extracted data.
@@ -72,6 +75,9 @@ class DataProcessor:
         # Separate the ADL and Drill files
         list_of_files = [f for f in files if 'Drill' not in f]
 
+        # Remove the test file from the list
+        list_of_files.remove(test_file)
+
         # Create an empty DataFrame with the extracted column names
         self.data_collection = pd.DataFrame(columns=self.columns)
 
@@ -83,6 +89,23 @@ class DataProcessor:
             self.data_collection = pd.concat([self.data_collection, proc_data])
 
         # Reset the DataFrame index
+        self.data_collection.reset_index(drop=True, inplace=True)
+
+    def extract_test_data(self, test_file="S4-ADL5.dat"):
+        """
+        Extracts testdata from .dat files in the OpportunityUCIDataset/dataset folder.
+
+        Returns:
+        pandas.DataFrame: Dataframe containing extracted data.
+        """
+        # Create an empty DataFrame with the extracted column names
+        self.data_collection = pd.DataFrame(columns=self.columns)
+
+        proc_data = pd.read_table(os.path.join(self.data_dir, test_file), header=None, sep='\s+')
+        print(test_file, len(proc_data))
+        proc_data.columns = self.columns
+        self.data_collection = pd.concat([self.data_collection, proc_data])
+
         self.data_collection.reset_index(drop=True, inplace=True)
 
     def data_cleaning(self):
@@ -109,6 +132,38 @@ class DataProcessor:
         # Drop any remaining NaN values to ensure only non-NaN data remains
         self.data_collection = self.data_collection.dropna()
 
+    def init_label_legend(self):
+        """
+        Resets labels in the given DataFrame based on the information from 'label_legend.txt'.
+        """
+
+        # Read label_legend.txt file
+        labels = pd.read_csv('OpportunityUCIDataset/dataset/label_legend.txt', sep='   -   ', header=0)
+
+        for track in labels['Track name'].unique():
+            self.track_dict[track] = dict(labels.loc[labels['Track name'] == track][["Unique index", "Label name"]].to_numpy())
+
+        # Special case for 'Locomotion' track
+        for track in self.track_dict:
+            if track == 'Locomotion':
+                self.track_dict[track][1] = 1
+                self.track_dict[track][2] = 2
+                self.track_dict[track][4] = 3
+                self.track_dict[track][5] = 4
+            else:
+                i = 1
+                for key in self.track_dict[track]:
+                    self.track_dict[track][key] = i
+                    i += 1
+
+        for track in self.track_dict:
+            self.reset_label_to_original_label[track] = {}
+            self.reset_label_to_original_label[track][0] = 0
+            for key in self.track_dict[track]:
+                original_label = key
+                reset_label = self.track_dict[track][key]
+                self.reset_label_to_original_label[track][reset_label] = int(original_label)
+
     def reset_label(self):
         """
         Resets labels in the given DataFrame based on the information from 'label_legend.txt'.
@@ -119,37 +174,15 @@ class DataProcessor:
         Returns:
         pandas.DataFrame: DataFrame with reset labels.
         """
-
-        # Read label_legend.txt file
-        labels = pd.read_csv('OpportunityUCIDataset/dataset/label_legend.txt', sep='   -   ', header=0)
-
-        # Create a dictionary to map track names to label indices
-        track_dict = {}
-
-        for track in labels['Track name'].unique():
-            track_dict[track] = dict(labels.loc[labels['Track name'] == track][["Unique index", "Label name"]].to_numpy())
-
-        # Special case for 'Locomotion' track
-        for track in track_dict:
-            if track == 'Locomotion':
-                track_dict[track][1] = 1
-                track_dict[track][2] = 2
-                track_dict[track][4] = 3
-                track_dict[track][5] = 4
-            else:
-                i = 1
-                for key in track_dict[track]:
-                    track_dict[track][key] = i
-                    i += 1
-
         # Update labels in the DataFrame based on the mapping
-        for track in track_dict:
-            for key in track_dict[track]:
-                self.data_collection.loc[self.data_collection[track] == key, track] = track_dict[track][key]
+        for track in self.track_dict:
+            for key in self.track_dict[track]:
+                self.data_collection.loc[self.data_collection[track] == key, track] = self.track_dict[track][key]
 
     def normalize_data(self):
         """
-        Normalize numeric columns in the DataFrame using StandardScaler.
+        Normalize numeric columns in the DataFrame using StandardScaler. 
+        Except for the last 7 columns(activity labels) and the first column(milisecond).
 
         Args:
         df (pandas.DataFrame): Input DataFrame.
@@ -159,10 +192,12 @@ class DataProcessor:
         """
         
         scaler = StandardScaler()
-        self.data_collection[self.data_collection.columns[:-7]] = scaler.fit_transform(self.data_collection[self.data_collection.columns[:-7]])
+        self.data_collection[self.data_collection.columns[1:-7]] = scaler.fit_transform(self.data_collection[self.data_collection.columns[1:-7]])
 
-    def read_data(self):
-        return pd.read_csv('OpportunityUCIDataset/dataset/cleaned_data.csv')
+    def read_data(self, testset=False):
+        if testset:
+            return pd.read_csv('OpportunityUCIDataset/dataset/cleaned_testdata.csv')
+        return pd.read_csv('OpportunityUCIDataset/dataset/cleaned_traindata.csv')
     
     def transform_to_window_data(self, X, y, window_size=32):
         """
@@ -192,8 +227,10 @@ class DataProcessor:
 
 if __name__ == "__main__":
     processor = DataProcessor()
-    processor.extract_data()
+    # processor.extract_train_data()
+    processor.extract_test_data()
     processor.data_cleaning()
     processor.reset_label()
     processor.normalize_data()
-    processor.data_collection.to_csv('OpportunityUCIDataset/dataset/cleaned_data.csv', index=False)
+    # processor.data_collection.to_csv('OpportunityUCIDataset/dataset/traindata.csv', index=False)
+    processor.data_collection.to_csv('OpportunityUCIDataset/dataset/testdata.csv', index=False)
