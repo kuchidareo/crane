@@ -29,18 +29,6 @@ def create_dataloader(X, y, batch_size=32, shuffle=True):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
     return dataloader
 
-def test(model, dataloader):
-    _, non_zero_val_accuracy, _, overall_val_acccuracy, _, _ = evaluate_accuracy(model, dataloader)
-    
-    mlflow.log_metrics(
-        {
-            "non_zero_test_accuracy": non_zero_val_accuracy,
-            "overall_test_accuracy": overall_val_acccuracy
-        }
-    )
-
-    print(f'Non-Zero Test Acc. {non_zero_val_accuracy:.4f}, Overall Test Acc.: {overall_val_acccuracy:.4f}')
-
 def evaluate_accuracy(model, dataloader):
     non_zero_loss = 0
     non_zero_correct = 0
@@ -85,9 +73,9 @@ def evaluate_accuracy(model, dataloader):
     overall_accuracy = overall_correct / overall_total if overall_total > 0 else 0.0
     return non_zero_val_loss, non_zero_val_accuracy, overall_loss, overall_accuracy, predicted_labels, confusion_matrix
 
-def train(model, dataloader, val_dataloader, epochs=10, patience=5):
+def train(model, dataloader, val_dataloader, epochs=10, patience=5, lr=0.001):
     model.train()
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     
     best_val_loss = float('inf')
     epochs_without_improvement = 0
@@ -120,6 +108,18 @@ def train(model, dataloader, val_dataloader, epochs=10, patience=5):
             if epochs_without_improvement >= patience:
                 print(f'Early stopping triggered after {epoch + 1} epochs.')
                 break
+
+def test(model, dataloader):
+    _, non_zero_val_accuracy, _, overall_val_acccuracy, _, _ = evaluate_accuracy(model, dataloader)
+    
+    mlflow.log_metrics(
+        {
+            "non_zero_test_accuracy": non_zero_val_accuracy,
+            "overall_test_accuracy": overall_val_acccuracy
+        }
+    )
+
+    print(f'Non-Zero Test Acc. {non_zero_val_accuracy:.4f}, Overall Test Acc.: {overall_val_acccuracy:.4f}')
 
 def save_model(model, model_name):
     torch.save(model.state_dict(), f'trained_model/{model_name}')
@@ -177,6 +177,12 @@ def main(config):
     position = config.position
     model_name = f"{model_type}_{window_size}_{position}.pth"
 
+    num_cnn_units = 32
+    num_fc_units = 64
+    dropout_rate = 0.2
+    batch_size = 32
+    lr = 0.001
+
     sensors = processor.position_to_sensor[position]
     columns = [processor.sensor_to_column[sensor] for sensor in sensors]
     flatten_columns = [item for row in columns for item in row]
@@ -191,18 +197,18 @@ def main(config):
     X_test, y_test = processor.transform_to_window_data(X_test, y_test, window_size=window_size)
 
     X_train, X_val, y_train, y_val = train_test_split(X, y, shuffle=False, test_size=0.20)
-    train_dataloader = create_dataloader(X_train, y_train, batch_size=32, shuffle=True)
-    val_dataloader = create_dataloader(X_val, y_val, batch_size=32, shuffle=False)
-    test_dataloader = create_dataloader(X_test, y_test, batch_size=32, shuffle=False)
+    train_dataloader = create_dataloader(X_train, y_train, batch_size=batch_size, shuffle=True)
+    val_dataloader = create_dataloader(X_val, y_val, batch_size=batch_size, shuffle=False)
+    test_dataloader = create_dataloader(X_test, y_test, batch_size=batch_size, shuffle=False)
 
     if position in [value.RIGHT_ARM, value.LEFT_ARM]:
         if model_type == 'CNN':
-            model = models.LL_Arm_CNN(window_size=window_size)
+            model = models.LL_Arm_CNN(window_size=window_size, num_cnn_units=num_cnn_units, num_fc_units=num_fc_units, dropout_rate=dropout_rate)
         elif model_type == 'LSTM':
             model = models.LL_Arm_LSTM()
     else:
         if model_type == 'CNN':
-            model = models.Locomotion_CNN(window_size=window_size)
+            model = models.Locomotion_CNN(window_size=window_size, num_cnn_units=num_cnn_units, num_fc_units=num_fc_units, dropout_rate=dropout_rate)
         elif model_type == 'LSTM':
             model = models.Locomotion_LSTM()
 
@@ -211,7 +217,7 @@ def main(config):
     else:
         with mlflow.start_run():
             log_params_from_omegaconf_dict(config)
-            train(model, train_dataloader, val_dataloader, epochs=20)
+            train(model, train_dataloader, val_dataloader, epochs=20, lr=lr)
             test(model, test_dataloader)
         save_model(model, model_name)
     generate_testset_with_prediction_label(config, processor, model, test_dataloader)
