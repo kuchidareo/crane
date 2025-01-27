@@ -70,7 +70,8 @@ class DataProcessor:
 
         # Get all the .dat files in the dataset folder
         files = os.listdir(self.data_dir)
-        files = [f for f in files if f.endswith('.dat')]
+        # files = [f for f in files if f.endswith('.dat')]
+        files = [f for f in files if f.startswith("S4") and f.endswith('.dat')]
 
         # Separate the ADL and Drill files
         list_of_files = [f for f in files if 'Drill' not in f]
@@ -227,10 +228,10 @@ class DataProcessor:
 
 if __name__ == "__main__":
     processor = DataProcessor()
-    # processor.extract_train_data()
-    processor.extract_test_data()
+    processor.extract_train_data()
+    # processor.extract_test_data()
     processor.data_cleaning()
     processor.reset_label()
     processor.normalize_data()
-    # processor.data_collection.to_csv('OpportunityUCIDataset/dataset/traindata.csv', index=False)
-    processor.data_collection.to_csv('OpportunityUCIDataset/dataset/testdata.csv', index=False)
+    processor.data_collection.to_csv('OpportunityUCIDataset/dataset/s4-traindata.csv', index=False)
+    # processor.data_collection.to_csv('OpportunityUCIDataset/dataset/s4-testdata.csv', index=False)

@@ -9,8 +9,9 @@ from omegaconf import OmegaConf
 import pandas as pd
 import seaborn as sns
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
 import torch
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import TensorDataset, DataLoader, WeightedRandomSampler
 from tqdm import tqdm
 
 import value
@@ -21,12 +22,13 @@ from util import log_params_from_omegaconf_dict
 
 warnings.filterwarnings('ignore')
 
-def create_dataloader(X, y, batch_size=32, shuffle=True):
+def create_dataloader(X, y, batch_size=32, shuffle=True, sampler=None):
     X_tensor = torch.tensor(X, dtype=torch.float32)
     y_tensor = torch.tensor(y, dtype=torch.long)
 
     dataset = TensorDataset(X_tensor, y_tensor)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+    # dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+    dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)
     return dataloader
 
 def evaluate_accuracy(model, dataloader):
@@ -36,6 +38,7 @@ def evaluate_accuracy(model, dataloader):
     overall_loss = 0
     overall_correct = 0
     overall_total = 0
+    true_labels = []
     predicted_labels = []
     confusion_matrix = np.zeros((model.num_classes, model.num_classes))
 
@@ -44,6 +47,7 @@ def evaluate_accuracy(model, dataloader):
             outputs = model(X_batch)
             _, predicted = torch.max(outputs, 1)
 
+            true_labels.extend(y_batch.tolist())
             predicted_labels.extend(predicted.tolist())
 
             # Calculate overall accuracy and loss
@@ -71,7 +75,7 @@ def evaluate_accuracy(model, dataloader):
     non_zero_val_accuracy = non_zero_correct / non_zero_total if non_zero_total > 0 else 0.0
     overall_loss = overall_loss / overall_total if overall_total > 0 else float('inf')
     overall_accuracy = overall_correct / overall_total if overall_total > 0 else 0.0
-    return non_zero_val_loss, non_zero_val_accuracy, overall_loss, overall_accuracy, predicted_labels, confusion_matrix
+    return non_zero_val_loss, non_zero_val_accuracy, overall_loss, overall_accuracy, true_labels, predicted_labels, confusion_matrix
 
 def train(model, dataloader, val_dataloader, epochs=10, patience=5, lr=0.001):
     model.train()
@@ -88,7 +92,7 @@ def train(model, dataloader, val_dataloader, epochs=10, patience=5, lr=0.001):
             loss.backward()
             optimizer.step()
 
-        non_zero_val_loss, non_zero_val_accuracy, overall_val_loss, overall_val_accuracy, _, _ = evaluate_accuracy(model, val_dataloader)
+        non_zero_val_loss, non_zero_val_accuracy, overall_val_loss, overall_val_accuracy, _, _, _ = evaluate_accuracy(model, val_dataloader)
         mlflow.log_metrics(
             {
                 "non_zero_val_loss": non_zero_val_loss,
@@ -110,7 +114,7 @@ def train(model, dataloader, val_dataloader, epochs=10, patience=5, lr=0.001):
                 break
 
 def test(model, dataloader):
-    _, non_zero_val_accuracy, _, overall_val_acccuracy, _, _ = evaluate_accuracy(model, dataloader)
+    _, non_zero_val_accuracy, _, overall_val_acccuracy, _, _, _ = evaluate_accuracy(model, dataloader)
     
     mlflow.log_metrics(
         {
@@ -139,26 +143,33 @@ def save_testset_prediction_accuracy(confusion_matrix, config):
 def generate_testset_with_prediction_label(config, processor, model, test_dataloader):
     original_position = processor.position_to_original_position_label[config.position]
     
-    _, non_zero_acc, _, acc, predicted_labels, confusion_matrix = evaluate_accuracy(model, test_dataloader)
-    predicted_original_labels = [processor.reset_label_to_original_label[original_position][label] for label in predicted_labels]
+    _, non_zero_acc, _, acc, true_labels, predicted_labels, confusion_matrix = evaluate_accuracy(model, test_dataloader)
+    print(classification_report(true_labels, predicted_labels))
     save_testset_prediction_accuracy(confusion_matrix, config)
 
+    predicted_original_labels = [processor.reset_label_to_original_label[original_position][label] for label in predicted_labels]
+
     testset_with_prediction_filename = f'{value.testdata_with_prediction_filename}_{config.model_type}_{config.window_size}'
-    file_path = testset_with_prediction_filename if os.path.exists(f"{testset_with_prediction_filename}.csv") else value.testdata_filename
-    df = pd.read_csv(f"{file_path}.csv")
+    if os.path.exists(f"{testset_with_prediction_filename}.csv"):
+        df = pd.read_csv(f"{testset_with_prediction_filename}.csv")
+    else:
+        df = pd.read_csv(f"{value.testdata_filename}.csv")
 
     df[original_position] = df[original_position].map(processor.reset_label_to_original_label[original_position])
     predicted_labels_column = [0 for _ in range(len(df))]
-    for i in range(0, len(df) - config.window_size, config.window_size):
-        if i < len(predicted_original_labels):
-            predicted_labels_column[i:i+config.window_size] = [predicted_original_labels[i] for _ in range(config.window_size)]
-        elif i == len(predicted_original_labels):
-            predicted_labels_column = predicted_labels_column[:i]
+    for i in range(len(predicted_original_labels)):
+        start_index = i*config.window_size
+        end_index = (i+1)*config.window_size
+        if end_index < len(predicted_labels_column):
+            predicted_labels_column[start_index:end_index] = [predicted_original_labels[i] for _ in range(config.window_size)]
+        else:
+            predicted_labels_column[start_index:] = [0 for _ in range(len(predicted_labels_column)-start_index)]
+
     df[f'{original_position}_Predicted'] = predicted_labels_column
 
     if config.position in [value.RIGHT_ARM, value.LEFT_ARM]:
-        df[original_position] = df[f'{original_position}'].astype(int)
-        df[f'{original_position}_Predicted'] = df[f'{original_position}_Predicted'].astype(int)
+        df[original_position] = df[f'{original_position}'].fillna(0).astype(int)
+        df[f'{original_position}_Predicted'] = df[f'{original_position}_Predicted'].fillna(0).astype(int)
     print(df[f'{original_position}'].value_counts())
     print(df[f'{original_position}_Predicted'].value_counts())
     df.to_csv(f"{testset_with_prediction_filename}.csv", index=False)
@@ -170,6 +181,7 @@ def main(config):
 
     processor = DataProcessor()
     train_df = pd.read_csv(f"{value.traindata_filename}.csv")
+    # train_df = pd.read_csv(f"{value.s4_traindata_filename}.csv")
     test_df = pd.read_csv(f"{value.testdata_filename}.csv")
    
     window_size = config.window_size
@@ -179,9 +191,9 @@ def main(config):
 
     num_cnn_units = 32
     num_fc_units = 64
-    dropout_rate = 0.2
+    dropout_rate = 0.27
     batch_size = 32
-    lr = 0.001
+    lr = 0.0001
 
     sensors = processor.position_to_sensor[position]
     columns = [processor.sensor_to_column[sensor] for sensor in sensors]
@@ -196,10 +208,17 @@ def main(config):
     X, y = processor.transform_to_window_data(X, y, window_size=window_size)
     X_test, y_test = processor.transform_to_window_data(X_test, y_test, window_size=window_size)
 
-    X_train, X_val, y_train, y_val = train_test_split(X, y, shuffle=False, test_size=0.20)
-    train_dataloader = create_dataloader(X_train, y_train, batch_size=batch_size, shuffle=True)
+    X_train, X_val, y_train, y_val = train_test_split(X, y, shuffle=True, test_size=0.20)
+
+    class_counts = np.bincount(y_train)  # Example counts of each class
+    class_weights = 1. / torch.tensor(class_counts, dtype=torch.float)
+    samples_weight = [class_weights[index] for index in y_train]
+    sampler = WeightedRandomSampler(samples_weight, len(samples_weight))
+
+    train_dataloader = create_dataloader(X_train, y_train, batch_size=batch_size, shuffle=False, sampler=sampler)
     val_dataloader = create_dataloader(X_val, y_val, batch_size=batch_size, shuffle=False)
     test_dataloader = create_dataloader(X_test, y_test, batch_size=batch_size, shuffle=False)
+
 
     if position in [value.RIGHT_ARM, value.LEFT_ARM]:
         if model_type == 'CNN':
@@ -219,7 +238,7 @@ def main(config):
             log_params_from_omegaconf_dict(config)
             train(model, train_dataloader, val_dataloader, epochs=20, lr=lr)
             test(model, test_dataloader)
-        save_model(model, model_name)
+        # save_model(model, model_name)
     generate_testset_with_prediction_label(config, processor, model, test_dataloader)
 
 if __name__ == "__main__":
