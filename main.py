@@ -155,7 +155,9 @@ def generate_testset_with_prediction_label(config, processor, model, test_datalo
     else:
         df = pd.read_csv(f"{value.testdata_filename}.csv")
 
-    df[original_position] = df[original_position].map(processor.reset_label_to_original_label[original_position])
+    for column_label, mapping in processor.reset_label_to_original_label.items():
+        df[column_label] = df[column_label].map(mapping)
+
     predicted_labels_column = [0 for _ in range(len(df))]
     for i in range(len(predicted_original_labels)):
         start_index = i*config.window_size
