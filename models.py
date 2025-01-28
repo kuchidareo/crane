@@ -3,11 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class Base_CNN(nn.Module):
-    def __init__(self, num_classes, window_size=1, num_cnn_units=32, num_fc_units=128, dropout_rate=0.2):
+    def __init__(self, num_classes, num_columns, window_size=1, num_cnn_units=32, num_fc_units=128, dropout_rate=0.2):
         super(Base_CNN, self).__init__()
 
         self.num_classes = num_classes
-        input_size = window_size * 38
+        input_size = window_size * num_columns
 
         self.relu = nn.ReLU()
         self.elu = nn.ELU()
@@ -48,11 +48,27 @@ class Base_CNN(nn.Module):
 
 class LL_Arm_CNN(Base_CNN):
     def __init__(self, window_size=1, num_cnn_units=32, num_fc_units=128, dropout_rate=0.2):
-        super(LL_Arm_CNN, self).__init__(num_classes=14, window_size=window_size, num_cnn_units=num_cnn_units, num_fc_units=num_fc_units, dropout_rate=dropout_rate)
+        num_classes = 14
+        num_columns = 38
+        super(LL_Arm_CNN, self).__init__(num_classes, num_columns, window_size, num_cnn_units, num_fc_units, dropout_rate)
     
 class Locomotion_CNN(Base_CNN):
     def __init__(self, window_size=1, num_cnn_units=32, num_fc_units=128, dropout_rate=0.2):
-        super(Locomotion_CNN, self).__init__(num_classes=5, window_size=window_size, num_cnn_units=num_cnn_units, num_fc_units=num_fc_units, dropout_rate=dropout_rate)
+        num_classes = 5
+        num_columns = 38
+        super(Locomotion_CNN, self).__init__(num_classes, num_columns, window_size, num_cnn_units, num_fc_units, dropout_rate)
+
+class Both_Arms_CNN(Base_CNN):
+    def __init__(self, window_size=1, num_cnn_units=32, num_fc_units=128, dropout_rate=0.2):
+        num_classes = 18
+        num_columns = 160
+        super(Both_Arms_CNN, self).__init__(num_classes, num_columns, window_size, num_cnn_units, num_fc_units, dropout_rate)
+
+class Objects_CNN(Base_CNN):
+    def __init__(self, window_size=1, num_cnn_units=32, num_fc_units=128, dropout_rate=0.2):
+        num_classes = 24
+        num_columns = 122
+        super(Objects_CNN, self).__init__(num_classes, num_columns, window_size, num_cnn_units, num_fc_units, dropout_rate)
 
 class Base_LSTM(nn.Module):
     def __init__(self, num_classes):

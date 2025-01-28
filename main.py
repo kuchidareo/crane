@@ -227,11 +227,21 @@ def main(config):
             model = models.LL_Arm_CNN(window_size=window_size, num_cnn_units=num_cnn_units, num_fc_units=num_fc_units, dropout_rate=dropout_rate)
         elif model_type == 'LSTM':
             model = models.LL_Arm_LSTM()
-    else:
+    elif position in [value.LOCOMOTION]:
         if model_type == 'CNN':
             model = models.Locomotion_CNN(window_size=window_size, num_cnn_units=num_cnn_units, num_fc_units=num_fc_units, dropout_rate=dropout_rate)
         elif model_type == 'LSTM':
             model = models.Locomotion_LSTM()
+    elif position in [value.BOTH_ARMS]:
+        if model_type == 'CNN':
+            model = models.Both_Arms_CNN(window_size=window_size, num_cnn_units=num_cnn_units, num_fc_units=num_fc_units, dropout_rate=dropout_rate)
+        elif model_type == 'LSTM':
+            model = models.Both_Arms_LSTM()
+    elif position in [value.RIGHT_OBJECT, value.LEFT_OBJECT]:
+        if model_type == 'CNN':
+            model = models.Objects_CNN(window_size=window_size, num_cnn_units=num_cnn_units, num_fc_units=num_fc_units, dropout_rate=dropout_rate)
+        elif model_type == 'LSTM':
+            model = models.Objects_LSTM()
 
     if model_name in os.listdir('trained_model'):
         load_model(model, model_name)
