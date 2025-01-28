@@ -70,29 +70,29 @@ class Objects_CNN(Base_CNN):
         num_columns = 122
         super(Objects_CNN, self).__init__(num_classes, num_columns, window_size, num_cnn_units, num_fc_units, dropout_rate)
 
-class Base_LSTM(nn.Module):
-    def __init__(self, num_classes):
-        super(Base_LSTM, self).__init__()
+# class Base_LSTM(nn.Module):
+#     def __init__(self, num_classes):
+#         super(Base_LSTM, self).__init__()
 
-        self.num_classes = num_classes
+#         self.num_classes = num_classes
 
-        self.lstm1 = nn.LSTM(input_size=38, hidden_size=50, batch_first=True)
-        self.dropout = nn.Dropout(0.2)
-        self.lstm2 = nn.LSTM(input_size=50, hidden_size=50, batch_first=True)
-        self.fc = nn.Linear(50, self.num_classes)  # Output layer
+#         self.lstm1 = nn.LSTM(input_size=38, hidden_size=50, batch_first=True)
+#         self.dropout = nn.Dropout(0.2)
+#         self.lstm2 = nn.LSTM(input_size=50, hidden_size=50, batch_first=True)
+#         self.fc = nn.Linear(50, self.num_classes)  # Output layer
 
-    def forward(self, x):
-        out, _ = self.lstm1(x)
-        out = self.dropout(out)
-        out, _ = self.lstm2(out)
-        out = self.dropout(out)
-        out = self.fc(out[:, -1, :])  # Get the last time step output
-        return out
+#     def forward(self, x):
+#         out, _ = self.lstm1(x)
+#         out = self.dropout(out)
+#         out, _ = self.lstm2(out)
+#         out = self.dropout(out)
+#         out = self.fc(out[:, -1, :])  # Get the last time step output
+#         return out
 
-class LL_Arm_LSTM(Base_LSTM):
-    def __init__(self, num_classes=14):
-        super(LL_Arm_LSTM, self).__init__(num_classes=num_classes)
+# class LL_Arm_LSTM(Base_LSTM):
+#     def __init__(self, num_classes=14):
+#         super(LL_Arm_LSTM, self).__init__(num_classes=num_classes)
         
-class Locomotion_LSTM(Base_LSTM):
-    def __init__(self, num_classes=5):
-        super(LL_Arm_LSTM, self).__init__(num_classes=num_classes)
+# class Locomotion_LSTM(Base_LSTM):
+#     def __init__(self, num_classes=5):
+#         super(LL_Arm_LSTM, self).__init__(num_classes=num_classes)

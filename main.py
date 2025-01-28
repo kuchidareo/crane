@@ -221,27 +221,14 @@ def main(config):
     val_dataloader = create_dataloader(X_val, y_val, batch_size=batch_size, shuffle=False)
     test_dataloader = create_dataloader(X_test, y_test, batch_size=batch_size, shuffle=False)
 
-
     if position in [value.RIGHT_ARM, value.LEFT_ARM]:
-        if model_type == 'CNN':
-            model = models.LL_Arm_CNN(window_size=window_size, num_cnn_units=num_cnn_units, num_fc_units=num_fc_units, dropout_rate=dropout_rate)
-        elif model_type == 'LSTM':
-            model = models.LL_Arm_LSTM()
+        model = models.LL_Arm_CNN(window_size, num_cnn_units, num_fc_units, dropout_rate)
     elif position in [value.LOCOMOTION]:
-        if model_type == 'CNN':
-            model = models.Locomotion_CNN(window_size=window_size, num_cnn_units=num_cnn_units, num_fc_units=num_fc_units, dropout_rate=dropout_rate)
-        elif model_type == 'LSTM':
-            model = models.Locomotion_LSTM()
+        model = models.Locomotion_CNN(window_size, num_cnn_units, num_fc_units, dropout_rate)
     elif position in [value.BOTH_ARMS]:
-        if model_type == 'CNN':
-            model = models.Both_Arms_CNN(window_size=window_size, num_cnn_units=num_cnn_units, num_fc_units=num_fc_units, dropout_rate=dropout_rate)
-        elif model_type == 'LSTM':
-            model = models.Both_Arms_LSTM()
+        model = models.Both_Arms_CNN(window_size, num_cnn_units, num_fc_units, dropout_rate)
     elif position in [value.RIGHT_OBJECT, value.LEFT_OBJECT]:
-        if model_type == 'CNN':
-            model = models.Objects_CNN(window_size=window_size, num_cnn_units=num_cnn_units, num_fc_units=num_fc_units, dropout_rate=dropout_rate)
-        elif model_type == 'LSTM':
-            model = models.Objects_LSTM()
+        model = models.Objects_CNN(window_size, num_cnn_units, num_fc_units, dropout_rate)
 
     if model_name in os.listdir('trained_model'):
         load_model(model, model_name)
