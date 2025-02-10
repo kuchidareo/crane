@@ -138,6 +138,7 @@ from collections import Counter
 from scipy.spatial.distance import euclidean
 from nltk import word_tokenize
 from nltk.probability import FreqDist
+from nltk.corpus import wordnet as wn
 from nltk.util import ngrams
 from sentence_transformers import SentenceTransformer
 
@@ -285,6 +286,26 @@ def count_named_entities(texts):
         ner_count += len(doc.ents)  # Count named entities in each label
     return ner_count
 
+def contextual_dispersion(texts):
+    dispersion_scores = []
+    for i, text in enumerate(texts):
+        word_contexts = {}  # Dictionary to track which contexts each word appears in
+        total_text = len(text)
+        words = set(text.lower().split())  # Convert words to a set to avoid duplicates
+        for word in words:
+            if word not in word_contexts:
+                word_contexts[word] = set()
+            word_contexts[word].add(i)  # Add the index of the text as the context
+
+        dispersion_score = []
+        for word, contexts in word_contexts.items():
+            # Calculate the dispersion (fraction of contexts the word appears in)
+            dispersion = len(contexts) / total_text
+            dispersion_score.append(dispersion)
+        dispersion_scores.append(np.mean(dispersion_score))
+    
+    return np.mean(dispersion_score) if dispersion_score else 0
+
 # Compute and store results for each dataset
 results = {}
 for dataset_name, labels in datasets.items():
@@ -301,7 +322,8 @@ for dataset_name, labels in datasets.items():
         "Information Density (NER Count)": ner_count(labels),
         "Semantic Richness (BERT Norm)": semantic_richness(labels),
         "Total Embedding Distance": total_embedding_distance(labels),
-        "Named Entity Count": count_named_entities(labels)
+        "Named Entity Count": count_named_entities(labels),
+        "Contextual Dispersion": contextual_dispersion(labels),
     }
 
 # Print results in the desired format
